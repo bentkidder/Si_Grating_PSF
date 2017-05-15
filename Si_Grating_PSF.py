@@ -311,8 +311,10 @@ class LoadWindow(tk.Frame):
         self.beam_cross, = self.beam_ax.plot(self.beam_center[0], self.beam_center[1],\
             '+', ms = 8, color = 'black', zorder=2)
 
-        self.zygo_x_arr = np.linspace(0, self.zygo_img.shape[0]*self.current_pix_scale, self.zygo_img.shape[0])
-        self.zygo_y_arr = np.linspace(0, self.zygo_img.shape[1]*self.current_pix_scale, self.zygo_img.shape[1])
+        self.zygo_x_arr = np.linspace(0, self.zygo_img.shape[0]*self.current_pix_scale, \
+            self.zygo_img.shape[0])
+        self.zygo_y_arr = np.linspace(0, self.zygo_img.shape[1]*self.current_pix_scale, \
+            self.zygo_img.shape[1])
 
         self.beam_center_x_index = np.argmin(np.abs(self.zygo_x_arr-self.beam_center[0]))
         self.beam_center_y_index = np.argmin(np.abs(self.zygo_y_arr-self.beam_center[1]))
@@ -385,7 +387,7 @@ class PSFWindow(tk.Frame):
         self.pix_scale = pix_scale
         self.beam_radius = beam_radius
         self.beam_center = np.asarray(beam_center)
-        self.taper_sigma = 0.8 #mm
+        self.taper_sigma = 0.75 #mm
 
         #Set window title
         self.master.wm_title('PSF Window')
@@ -400,17 +402,19 @@ class PSFWindow(tk.Frame):
         self.master.protocol('WM_DELETE_WINDOW', self._quit)
 
         # Generate a figure for the load page.  
-        self.psf_fig = plt.figure(figsize=(12,7))  
+        self.psf_fig = plt.figure(figsize=(12,6.6))  
 
         # Use gridspec to set size ratio for main plot to side plots.
         self.psf_gs = gridspec.GridSpec(2, 3,  
                        width_ratios=[4,4,1],
-                       height_ratios=[5,1])
+                       height_ratios=[4,1])
 
 
         # Define the main plot and turn off axis tick labels, because they will
         # be taken care of by the side plots.
         self.beam_ax = plt.subplot(self.psf_gs[0])
+        self.beam_ax.get_xaxis().set_visible(False)
+        self.beam_ax.get_yaxis().set_visible(False)
 
         self.psf_ax = plt.subplot(self.psf_gs[1])
         self.psf_ax.get_xaxis().set_visible(False)
@@ -430,7 +434,8 @@ class PSFWindow(tk.Frame):
         self.psf_fig.canvas.draw()
 
         self.psf_canvas = FigureCanvasTkAgg(self.psf_fig, master=self.master)
-        self.psf_canvas.get_tk_widget().grid(row=0,column=0, columnspan=30, rowspan=22, sticky=('N','S','E','W'))
+        self.psf_canvas.get_tk_widget().grid(row=0,column=0, columnspan=30, rowspan=22, \
+            sticky=('N','S','E','W'))
 
         #Format zygo image for analysis
         self.format_image()
@@ -460,12 +465,35 @@ class PSFWindow(tk.Frame):
         y_max = y_min + int(self.zygo_img.shape[0])
 
 
-        #Place zygo image onto new grid 
-        self.zygo_format_img[y_min:y_max, x_min:x_max] = np.copy(self.zygo_img)
+        top_cut = int(self.zygo_img.shape[0])
+        bottom_cut = int(0)
+        right_cut = int(self.zygo_img.shape[1])
+        left_cut = int(0)
+        
+        if y_max>self.img_grid_size:
+            top_cut = int(self.zygo_img.shape[0] - (y_max-self.img_grid_size))
+            y_max = self.img_grid_size
+        if y_min<0: 
+            bottom_cut = np.absolute(y_min)
+            y_min = 0
 
-        #Create xmesh and ymesh arrays
+
+
+        #if x_max>self.img.grid_size:
+
+        
+        #self.psf_fig.canvas.draw()
+
+        #Place zygo image onto new grid 
+        self.zygo_format_img[y_min:y_max, x_min:x_max] = self.zygo_img[bottom_cut:top_cut, left_cut:right_cut]
+
+
+        self.beam_ax.imshow(self.zygo_format_img)
+        #Create xmesh, ymesh and rmesh arrays
         self.zygo_ax_array = np.arange(0, self.img_grid_size)*self.pix_scale
         self.x_mesh, self.y_mesh = np.meshgrid(self.zygo_ax_array, self.zygo_ax_array)
+        self.r_mesh = np.sqrt((self.x_mesh-(self.img_grid_size/2.0)*self.pix_scale)**2 \
+            + (self.y_mesh-(self.img_grid_size/2.0)*self.pix_scale)**2)
 
 
         #Eliminate nan values. Need to find a less stupid way to do this in the future
@@ -475,62 +503,49 @@ class PSFWindow(tk.Frame):
         #self.psf_fig.canvas.draw()
 
         #Blur image
-        self.blurred_img = gaussian_filter(self.zygo_format_img, sigma=30)
-        self.blurred_img[np.where(np.isnan(zygo_nan_copy)==False)] = \
-            zygo_nan_copy[np.where(np.isnan(zygo_nan_copy)==False)]
+        self.blurred_img = gaussian_filter(self.zygo_format_img, sigma=10)
+        self.blurred_img[np.where(self.r_mesh<=(self.beam_radius*1.05))] = \
+            self.zygo_format_img[np.where(self.r_mesh<=(self.beam_radius*1.05))]
+        self.zygo_format_img = np.copy(self.blurred_img)
+
+
 
 
     def edge_taper(self):
 
         taper_radius = self.beam_radius
-        self.r_mesh = np.sqrt((self.x_mesh-(self.img_grid_size/2.0)*self.pix_scale)**2 \
-            + (self.y_mesh-(self.img_grid_size/2.0)*self.pix_scale)**2)
+        
         self.taper_matrix = np.exp(-(((self.r_mesh-taper_radius))**2)/(2.0*(self.taper_sigma**2)))
         self.taper_matrix[np.where(self.r_mesh<=taper_radius)]=1.0
 
 
         self.zygo_format_img*=self.taper_matrix
-        self.zygo_format_img*=3.0
-        self.zygo_format_img+=(np.absolute(np.nanmin(self.zygo_format_img)) + 1.2)
+        self.zygo_format_img+=1.0
         self.psf = (np.absolute(fftpack.fftshift(fftpack.fft2(self.zygo_format_img))))
+
         self.psf/=np.nanmax(self.psf)
-        self.psf_ax.imshow(np.log10(np.sqrt(self.psf)),clim = (-4.0, -2.0)) 
-        self.beam_ax.imshow(self.zygo_format_img)
+        self.psf_ax.imshow(np.log10(np.sqrt(self.psf)),clim = (-3.5, 0.0), aspect=1.0) 
+        #self.beam_ax.imshow(self.taper_matrix)
         self.psf_gs.tight_layout(self.psf_fig)
 
-        self.beam_ax.set_xlim(250,750)
-        self.beam_ax.set_ylim(250,750)
+        self.beam_ax.set_xlim(100,900)
+        self.beam_ax.set_ylim(100,900)
 
-        self.psf_ax.set_xlim(100,900)
-        self.psf_ax.set_ylim(100,900)
+        #self.psf_ax.set_xlim(0,850)
+        #self.psf_ax.set_ylim(150,850)
+
+        #self.vertical_crosscut.set_ylim(100,900)
+        #self.horizontal_crosscut.set_xlim(100,900)
 
         self.psf_fig.canvas.draw()
 
 
         print np.mean(self.zygo_format_img)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
+  
 
     def _quit(self):
         self.master.destroy()
-
 
 
 
