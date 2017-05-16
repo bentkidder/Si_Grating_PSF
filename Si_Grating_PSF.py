@@ -479,11 +479,6 @@ class PSFWindow(tk.Frame):
 
 
 
-        #if x_max>self.img.grid_size:
-
-        
-        #self.psf_fig.canvas.draw()
-
         #Place zygo image onto new grid 
         self.zygo_format_img[y_min:y_max, x_min:x_max] = self.zygo_img[bottom_cut:top_cut, left_cut:right_cut]
 
@@ -499,8 +494,7 @@ class PSFWindow(tk.Frame):
         #Eliminate nan values. Need to find a less stupid way to do this in the future
         zygo_nan_copy = np.copy(self.zygo_format_img)
         self.zygo_format_img[np.where(np.isnan(self.zygo_format_img)==True)] = 0.0
-        #self.psf_ax.imshow(self.zygo_format_img)
-        #self.psf_fig.canvas.draw()
+
 
         #Blur image
         self.blurred_img = gaussian_filter(self.zygo_format_img, sigma=10)
