@@ -525,11 +525,6 @@ class PSFWindow(tk.Frame):
         self.beam_ax.set_xlim(100,900)
         self.beam_ax.set_ylim(100,900)
 
-        #self.psf_ax.set_xlim(0,850)
-        #self.psf_ax.set_ylim(150,850)
-
-        #self.vertical_crosscut.set_ylim(100,900)
-        #self.horizontal_crosscut.set_xlim(100,900)
 
         self.psf_fig.canvas.draw()
 
